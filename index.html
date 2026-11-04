@@ -86,6 +86,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .bge-onsite{background:rgba(29,158,117,.2);color:#3dd6a3;border:1px solid rgba(29,158,117,.3);}
 .bge-pending{background:rgba(232,197,71,.15);color:#e8c547;border:1px solid rgba(232,197,71,.3);}
 .bge-approved{background:rgba(29,158,117,.15);color:#3dd6a3;border:1px solid rgba(29,158,117,.3);}
+.bge-alert{background:rgba(224,85,85,.18);color:#ff8a8a;border:1px solid rgba(224,85,85,.45);}
+.bge-spike{background:rgba(133,79,11,.2);color:#d4a843;border:1px solid rgba(133,79,11,.4);}
 .bge-draft,.bge-recalled{background:rgba(122,127,148,.12);color:#9da3b8;border:1px solid rgba(122,127,148,.2);}
 .fr{display:flex;gap:10px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap;}
 .fld{display:flex;flex-direction:column;gap:4px;}
@@ -203,9 +205,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div class="tabs">
   <button class="tab active" onclick="switchTab(event,'manual')">Log Hours</button>
   <button class="tab" onclick="switchTab(event,'timesheets')">Timesheets</button>
+  <button class="tab aot" onclick="switchTab(event,'mypay')" style="display:none;">My Pay</button>
   <button class="tab aot" onclick="switchTab(event,'approvals')" style="display:none;">Approvals <span id="pend-badge" style="display:none;background:var(--er);color:#fff;border-radius:99px;padding:1px 6px;font-size:11px;margin-left:3px;"></span></button>
   <button class="tab" onclick="switchTab(event,'expenses')">Expenses</button>
-  <button class="tab aot" onclick="switchTab(event,'reports')" style="display:none;">Reports</button>
+  <button class="tab aot" onclick="switchTab(event,'reports')" style="display:none;">Reports <span id="proj-alert-badge" style="display:none;background:var(--er);color:#fff;border-radius:99px;padding:1px 6px;font-size:11px;margin-left:3px;"></span></button>
   <button class="tab" onclick="switchTab(event,'rates')">Rates</button>
 </div>
 
@@ -275,6 +278,66 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   </div>
 </div>
 
+<!-- MY PAY (admins: own hours and pay only) -->
+<div class="sec" id="section-mypay">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:1rem;">
+      <div>
+        <div class="ct" style="margin:0;" id="my-title">My pay</div>
+        <div style="font-size:12px;color:var(--mu);margin-top:3px;">Only your own hours and expenses. Use Prev / Next in the top bar to change periods.</div>
+      </div>
+      <button class="btn pr" id="my-submit-btn" onclick="submitMyPeriod()" style="flex-shrink:0;">Submit for approval ↗</button>
+    </div>
+    <div class="sg">
+      <div class="sb3"><div class="sl">Office</div><div class="sv" id="my-off">0.00h</div></div>
+      <div class="sb3"><div class="sl">Travel</div><div class="sv" id="my-trv">0.00h</div></div>
+      <div class="sb3"><div class="sl">Onsite</div><div class="sv" id="my-ons">0.00h</div></div>
+      <div class="sb3"><div class="sl">Total Hours</div><div class="sv" id="my-tot">0.00h</div></div>
+      <div class="sb3"><div class="sl">Total Expenses</div><div class="sv" style="color:var(--ok);" id="my-exp-tot">$0.00</div></div>
+      <div class="sb3"><div class="sl">Est. Earnings</div><div class="sv" style="color:var(--ac);" id="my-earn">—</div></div>
+    </div>
+    <div id="my-status" style="font-size:12px;color:var(--mu);"></div>
+  </div>
+  <div class="card">
+    <div class="ct">Log my hours</div>
+    <div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:600;">Week 1</div>
+    <div class="wr" id="my-week1"></div>
+    <div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin:6px 0 4px;font-weight:600;">Week 2</div>
+    <div class="wr" id="my-week2"></div>
+    <div class="fb" style="margin-top:1rem;">
+      <div style="font-size:13px;font-weight:500;margin-bottom:10px;" id="my-day-lbl">Select a day above to log hours</div>
+      <div class="fr">
+        <div class="fld"><label>Hours</label><input type="number" id="my-hrs" min="0" max="24" step="0.5" placeholder="0" style="width:70px;"/></div>
+        <div class="fld"><label>Type</label><select id="my-type"><option value="office">Office</option><option value="travel">Travel</option><option value="onsite">Onsite</option></select></div>
+        <div class="fld" style="min-width:200px;flex:1;">
+          <label>Project <a href="#" id="my-man-toggle" onclick="toggleMyManual();return false;" style="font-size:10px;color:var(--mu);font-weight:400;text-transform:none;letter-spacing:0;"> — enter manually</a></label>
+          <div id="my-search-wrap" class="psw">
+            <input class="pi" id="my-proj-in" placeholder="Type project # or name..." autocomplete="off"
+              oninput="filterP('my')" onfocus="openDD('my')" onblur="closeDD('my')" onkeydown="navDD(event,'my')"/>
+            <input type="hidden" id="my-proj-gid"/>
+            <div class="pdd" id="my-proj-dd"></div>
+          </div>
+          <input class="pi" id="my-proj-manual" placeholder="Type project name..." style="display:none;margin-top:4px;"/>
+        </div>
+        <div class="fld" style="flex:1;min-width:100px;"><label>Notes</label><input type="text" id="my-notes" placeholder="Optional"/></div>
+        <button class="btn pr" onclick="addMyEntry()" style="height:36px;align-self:flex-end;">Add</button>
+      </div>
+    </div>
+    <div id="my-entry-list" style="overflow-x:auto;"></div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div class="ct" style="margin:0;">My expenses this period</div>
+      <button class="btn" onclick="switchTab(null,'expenses')">Add or edit expenses →</button>
+    </div>
+    <div id="my-exp-list" style="overflow-x:auto;"></div>
+  </div>
+  <div class="card">
+    <div class="ct">My submitted timesheets</div>
+    <div class="tscr" style="max-height:400px;overflow-y:auto;" id="my-ts-list"></div>
+  </div>
+</div>
+
 <!-- APPROVALS -->
 <div class="sec" id="section-approvals">
   <div class="card"><div class="ct">Pending approvals</div><div id="appr-list"></div></div>
@@ -326,6 +389,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 <!-- REPORTS -->
 <div class="sec" id="section-reports">
+  <div class="card" id="proj-watch-card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+      <div>
+        <div class="ct" style="margin:0;">Project hours this week</div>
+        <div style="font-size:12px;color:var(--mu);margin-top:3px;" id="pw-range"></div>
+      </div>
+      <div class="psnv" style="margin:0;">
+        <button onclick="navProjWeek(-1)">← Prev week</button>
+        <button id="pw-today" onclick="navProjWeek(0)" style="display:none;">This week</button>
+        <button onclick="navProjWeek(1)">Next week →</button>
+      </div>
+    </div>
+    <div id="pw-banner"></div>
+    <div class="sg" id="pw-stats"></div>
+    <div class="fr" style="margin-bottom:12px;">
+      <div class="fld"><label>Watch at (hrs/wk)</label><input type="number" id="pw-watch" min="1" step="1" onchange="saveProjAlertCfg()" style="width:90px;"/></div>
+      <div class="fld"><label>Alert at (hrs/wk)</label><input type="number" id="pw-alert" min="1" step="1" onchange="saveProjAlertCfg()" style="width:90px;"/></div>
+      <label style="font-size:12px;color:var(--mu);display:flex;align-items:center;gap:6px;height:36px;"><input type="checkbox" id="pw-overhead" onchange="renderProjectWatch()"/> Include overhead and admin time</label>
+    </div>
+    <div class="tscr" id="pw-table"></div>
+    <div style="font-size:11px;color:var(--mu);margin-top:8px;">Counts all logged hours, submitted or not. "Spike" means at least double last week and 20+ hours more. Click a project to see who charged it.</div>
+  </div>
   <div class="card"><div class="ct">Hours by project</div>
     <div class="fr" style="margin-bottom:1rem;">
       <div class="fld"><label>Filter project</label><input type="text" id="rpt-proj" placeholder="Type to filter..." oninput="renderReports()" style="font-size:13px;padding:7px 9px;border:1px solid var(--bd);border-radius:var(--rs);background:var(--bg2);color:var(--tx);min-width:160px;"/></div>
@@ -610,11 +695,14 @@ const EMPLOYEE_DIR = {
   'george.schuster@whitehorsesafety.com':  {name:'George Schuster',  group:'A'},
   'luke.tofte@whitehorsesafety.com':       {name:'Luke Tofte',       group:'A'},
   'luke.dean@whitehorsesafety.com':        {name:'Luke Dean',        group:'A'},
-  'ryan.klitzke@whitehorsesafety.com':     {name:'Ryan Klitzke',     group:'A'},
+  'ryan.klitzke@whitehorsesafety.com':     {name:'Ryan Klitzke',     group:'A', rate:86},
   'bernet.plummer@whitehorsesafety.com':   {name:'Bernet Plummer',   group:'A'},
   'hannah.yerington@whitehorsesafety.com': {name:'Hannah Yerington', group:'A'},
   'fisnik.vula@whitehorsesafety.com':      {name:'Fisnik Vula',      group:'A'},
   'daniel.varela@whitehorsesafety.com':    {name:'Daniel Varela',    group:'A'},
+  'mark@whitehorsesafety.com':             {name:'Mark Elliot',      group:'A'},
+  'brian.scoggins@whitehorsesafety.com':   {name:'Brian Scoggins',   group:'A'},
+  'kris.henderson@whitehorsesafety.com':   {name:'Kris Henderson',   group:'A'},
   'ted.s@whitehorsesafety.com':            {name:'Ted Sberna Jr',    group:'B'},
   'curtis.taylor@whitehorsesafety.com':    {name:'Curtis Taylor',    group:'B'},
   'manuel@whitehorsesafety.com':           {name:'Manuel Eades',     group:'B'},
@@ -625,6 +713,8 @@ const EMPLOYEE_DIR = {
   'bill.dyer@whitehorsesafety.com':        {name:'Bill Dyer',        group:'B'},
   'dale.bartholomew@whitehorsesafety.com': {name:'Dale Bartholomew', group:'B'},
   'zinovy.smorodin@whitehorsesafety.com':  {name:'Zinovy Smorodin',  group:'B'},
+  'jenny.tuertscher@whitehorsesafety.com': {name:'Jenny Tuertscher', group:'B'},
+  'trey.tellander@whitehorsesafety.com':   {name:'Trey Tellander',   group:'B'},
 };
 const ADMINS = ['ted.s@whitehorsesafety.com','ryan.klitzke@whitehorsesafety.com','mike@whitehorsesafety.com'];
 const SP_HOST = 'whitehorsesafety.sharepoint.com';
@@ -657,17 +747,29 @@ let currentUserEmail='', currentUserName='';
 let entries=[], timesheets=[], expenses=[];
 let selectedDay=null, periodOffset=0;
 let _editEntry=null, _editExpense=null;
-let focusIdx={man:-1, exp:-1, edit:-1, editexp:-1};
+let focusIdx={man:-1, exp:-1, edit:-1, editexp:-1, my:-1};
 
 function isAdmin() { return ADMINS.some(a=>a.toLowerCase()===currentUserEmail.toLowerCase()); }
 function getGroup() { const el=document.getElementById('pay-group'); return (el&&el.value)?el.value:'B'; }
-function isoDate(d) { return new Date(d).toISOString().slice(0,10); }
+// Dates are calendar days in the user's local time. Never step by fixed 24h blocks
+// (breaks at DST changes) and never format through UTC (shifts the day).
+function parseLocalDate(v) {
+  if (v instanceof Date) return new Date(v.getFullYear(),v.getMonth(),v.getDate());
+  const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(+m[1],+m[2]-1,+m[3]);
+  const d=new Date(v); return new Date(d.getFullYear(),d.getMonth(),d.getDate());
+}
+function addDays(d,n) { return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n); }
+function dayNum(d) { return Math.round(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/MS_DAY); }
+function isoDate(d) { const x=new Date(d); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); }
 function fmtDate(d) { return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function inPeriod(ds,s,e) { const d=new Date(ds+'T00:00:00'); return d>=s&&d<=e; }
-function getPeriodStart(g,ref) { const a=ANCHORS[g],d=new Date(ref)-a; return new Date(a.getTime()+Math.floor(d/MS_PERIOD)*MS_PERIOD); }
-function getPeriodEnd(s) { return new Date(s.getTime()+13*MS_DAY); }
-function getPeriod(g) { const b=getPeriodStart(g,new Date()); const s=new Date(b.getTime()+periodOffset*MS_PERIOD); return {start:s,end:getPeriodEnd(s)}; }
+function getPeriodStart(g,ref) { const a=ANCHORS[g],diff=dayNum(parseLocalDate(ref))-dayNum(a); return addDays(a,Math.floor(diff/14)*14); }
+function getPeriodEnd(s) { return addDays(s,13); }
+function getPeriod(g) { const b=getPeriodStart(g,new Date()); const s=addDays(b,periodOffset*14); return {start:s,end:getPeriodEnd(s)}; }
+// Label from the period key, so records saved with a bad label still display correctly
+function tsLabel(t) { if(!t.periodKey) return t.periodLabel||''; const s=parseLocalDate(t.periodKey); return fmtDate(s)+' – '+fmtDate(getPeriodEnd(s)); }
 function getExpPeriod() { return getPeriod(getGroup()); }
 
 // ============================================================
@@ -795,7 +897,8 @@ async function finishLogin() {
 // GRAPH API
 // ============================================================
 async function graph(method, path, body, _retried) {
-  const r=await fetch('https://graph.microsoft.com/v1.0'+path,{
+  const url=/^https:\/\/graph\.microsoft\.com\//.test(path)?path:'https://graph.microsoft.com/v1.0'+path;
+  const r=await fetch(url,{
     method,headers:{Authorization:'Bearer '+graphToken,'Content-Type':'application/json'},
     body:body?JSON.stringify(body):undefined
   });
@@ -808,6 +911,12 @@ async function graph(method, path, body, _retried) {
     throw new Error('Graph '+method+' '+path+' -> '+r.status+' '+await r.text());
   }
   return r.status===204?null:r.json();
+}
+// Follows @odata.nextLink so lists over one page are not silently cut off
+async function graphAll(path) {
+  let out=[],next=path;
+  while(next){const r=await graph('GET',next);out=out.concat(r.value||[]);next=r['@odata.nextLink']||null;}
+  return {value:out};
 }
 async function resolveSiteId() {
   const r=await graph('GET','/sites/'+SP_HOST+':'+SP_SITE_PATH);
@@ -826,7 +935,7 @@ async function loadFromSharePoint() {
   if (!siteId) return;
   setSyncState('syncing');
   try {
-    const eR=await graph('GET','/sites/'+siteId+'/lists/'+ENTRIES_LIST+'/items?expand=fields&$top=2000');
+    const eR=await graphAll('/sites/'+siteId+'/lists/'+ENTRIES_LIST+'/items?expand=fields&$top=2000');
     const allE=(eR.value||[]).map(i=>({
       spId:i.id, date:i.fields.EntryDate||'', hours:parseFloat(i.fields.Hours)||0,
       hourType:i.fields.HourType||'office', projectGid:i.fields.ProjectGid||'',
@@ -843,7 +952,7 @@ async function loadFromSharePoint() {
       return false; // entries with no identity info should NOT be shown to others
     });
 
-    const tR=await graph('GET','/sites/'+siteId+'/lists/'+TIMESHEETS_LIST+'/items?expand=fields&$top=2000');
+    const tR=await graphAll('/sites/'+siteId+'/lists/'+TIMESHEETS_LIST+'/items?expand=fields&$top=2000');
     const allTS=(tR.value||[]).map(i=>({
       spId:i.id, periodKey:i.fields.PeriodKey||'', periodLabel:i.fields.PeriodLabel||'',
       group:i.fields.PayGroup||'B', hours:parseFloat(i.fields.TotalHours)||0,
@@ -861,7 +970,7 @@ async function loadFromSharePoint() {
       return false;
     });;
 
-    const xR=await graph('GET','/sites/'+siteId+'/lists/'+EXPENSES_LIST+'/items?expand=fields&$top=2000');
+    const xR=await graphAll('/sites/'+siteId+'/lists/'+EXPENSES_LIST+'/items?expand=fields&$top=2000');
     const allX=(xR.value||[]).map(i=>({
       spId:i.id, date:i.fields.ExpenseDate||'', projectGid:i.fields.ProjectGid||'',
       project:i.fields.ProjectName||'', category:i.fields.Category||'other',
@@ -896,14 +1005,16 @@ async function loadFromSharePoint() {
 // ============================================================
 async function saveEntry(e) {
   if (!siteId) return;
-  const empName=(getEmployeeInfo(currentUserEmail)||{name:currentUserName}).name||currentUserName||e.employee||'';
+  // Keep the record's owner. An admin editing someone else's entry must not take it over.
+  const ownerEmail=e.employeeEmail||currentUserEmail||'';
+  const empName=e.employee||(getEmployeeInfo(currentUserEmail)||{name:currentUserName}).name||currentUserName||'';
   const full={EntryDate:e.date,Hours:e.hours,HourType:e.hourType,ProjectGid:e.projectGid||'',
     ProjectName:e.project||'',Notes:e.notes||'',PayGroup:e.group||getGroup(),
-    EmployeeName:empName,EmployeeEmail:currentUserEmail||'',
-    PeriodKey:getPeriodStart(e.group||getGroup(),e.date).toISOString().slice(0,10)};
+    EmployeeName:empName,EmployeeEmail:ownerEmail,
+    PeriodKey:isoDate(getPeriodStart(e.group||getGroup(),e.date))};
   const min={EntryDate:e.date,Hours:e.hours,HourType:e.hourType,ProjectName:e.project||'',
     Notes:e.notes||'',PayGroup:e.group||getGroup(),EmployeeName:empName,
-    PeriodKey:getPeriodStart(e.group||getGroup(),e.date).toISOString().slice(0,10)};
+    PeriodKey:isoDate(getPeriodStart(e.group||getGroup(),e.date))};
 
   // Safety check: before creating a NEW item, verify one wasn't already
   // created by a prior attempt whose response we lost (network hiccup).
@@ -956,13 +1067,15 @@ async function delTSFromSP(spId){
 }
 async function saveExpense(exp) {
   if (!siteId) throw new Error('Not connected');
-  const empName=(getEmployeeInfo(currentUserEmail)||{name:currentUserName}).name||currentUserName||'';
+  // Keep the record's owner. Approving someone's expense must not reassign it to the approver.
+  const ownerEmail=exp.employeeEmail||currentUserEmail||'';
+  const empName=exp.employee||(getEmployeeInfo(currentUserEmail)||{name:currentUserName}).name||currentUserName||'';
   const expDate=exp.date||isoDate(new Date());
   const expGroup=exp.group||getGroup();
   const pk=isoDate(getPeriodStart(expGroup,new Date(expDate+'T12:00:00')));
   const full={ExpenseDate:expDate,ProjectGid:exp.projectGid||'MANUAL',ProjectName:exp.project||'',
     Category:exp.category||'other',Amount:exp.amount||0,Description:exp.description||'',
-    PayGroup:expGroup,EmployeeName:empName,EmployeeEmail:currentUserEmail||'',PeriodKey:pk,Status:exp.status||'draft'};
+    PayGroup:expGroup,EmployeeName:empName,EmployeeEmail:ownerEmail,PeriodKey:pk,Status:exp.status||'draft'};
   const min={ExpenseDate:expDate,ProjectName:exp.project||'',Category:exp.category||'other',
     Amount:exp.amount||0,Description:exp.description||'',PayGroup:expGroup,EmployeeName:empName,Status:exp.status||'draft'};
   async function tryS(f){
@@ -1105,7 +1218,7 @@ function renderPeriodGrid(){
       const el=document.getElementById(id);if(!el)return;
       let html='';
       for(let i=0;i<7;i++){
-        const di=wi*7+i,d=new Date(start.getTime()+di*MS_DAY),ds=isoDate(d);
+        const di=wi*7+i,d=addDays(start,di),ds=isoDate(d);
         const dn=DAYS[(d.getDay()+6)%7];
         const hrs=entries.filter(e=>e.date===ds).reduce((a,e)=>a+e.hours,0);
         html+='<div class="dc'+(ds===today?' today':'')+(selectedDay===ds?' sel':'')+'" data-ds="'+ds+'" data-lbl="'+dn+' '+fmtDate(d)+'" onclick="selDay(this.dataset.ds,this.dataset.lbl)">'
@@ -1115,6 +1228,7 @@ function renderPeriodGrid(){
       el.innerHTML=html;
     });
     renderPeriodEntries(start,end);
+    renderMyPay();
   }catch(e){console.error('renderPeriodGrid:',e);}
 }
 function selDay(key,label){
@@ -1155,7 +1269,10 @@ function renderPeriodEntries(start,end){
 // ENTRY CRUD
 // ============================================================
 function getRates(){return{office:parseFloat(document.getElementById('r-office').value)||0,travel:parseFloat(document.getElementById('r-travel').value)||0,onsite:parseFloat(document.getElementById('r-onsite').value)||0};}
-function saveRates(){localStorage.setItem('whs_rates',JSON.stringify(getRates()));}
+// A login with a rate in EMPLOYEE_DIR gets that flat rate for all hour types by default,
+// and its Rates tab edits save under its own key so older saved rates cannot override it.
+function ratesKey(){const i=getEmployeeInfo(currentUserEmail);return i&&i.rate?'whs_rates_'+currentUserEmail:'whs_rates';}
+function saveRates(){localStorage.setItem(ratesKey(),JSON.stringify(getRates()));}
 function calcEarnings(es){const r=getRates();return es.reduce((s,e)=>s+e.hours*(r[e.hourType||'office']||0),0);}
 
 async function addEntry(){
@@ -1193,7 +1310,7 @@ async function dupEntry(eid){
     const{start,end}=getPeriod(getGroup());
     const pe=entries.filter(x=>inPeriod(x.date,start,end)).sort((a,b)=>a.date.localeCompare(b.date));
     src=pe[idx];
-  } else{src=entries.find(e=>e.spId===eid);}
+  } else{src=entries.find(e=>e.spId===eid||e._lid===eid);}
   if(!src){showToast('Entry not found');return;}
   const nd=new Date(new Date(src.date+'T12:00:00').getTime()+MS_DAY);
   const nds=isoDate(nd);
@@ -1215,7 +1332,7 @@ async function delEntry(eid){
     const{start,end}=getPeriod(getGroup());
     const pe=entries.filter(x=>inPeriod(x.date,start,end)).sort((a,b)=>a.date.localeCompare(b.date));
     e=pe[idx];
-  } else{e=entries.find(x=>x.spId===eid);}
+  } else{e=entries.find(x=>x.spId===eid||x._lid===eid);}
   if(!e){showToast('Entry not found');return;}
   if(e.spId)await delEntryFromSP(e.spId);
   entries=entries.filter(x=>x!==e);
@@ -1228,7 +1345,7 @@ function openEditModal(eid){
     const{start,end}=getPeriod(getGroup());
     const pe=entries.filter(x=>inPeriod(x.date,start,end)).sort((a,b)=>a.date.localeCompare(b.date));
     _editEntry=pe[idx];
-  } else{_editEntry=entries.find(e=>e.spId===eid);}
+  } else{_editEntry=entries.find(e=>e.spId===eid||e._lid===eid);}
   if(!_editEntry){showToast('Entry not found');return;}
   document.getElementById('edit-id').value=eid;
   document.getElementById('edit-date').value=_editEntry.date;
@@ -1249,7 +1366,7 @@ async function saveEditEntry(){
   _editEntry.projectGid=document.getElementById('edit-proj-gid').value||'MANUAL';
   _editEntry.notes=document.getElementById('edit-notes').value;
   if(!_editEntry.hours||_editEntry.hours<=0){showToast('Enter valid hours');return;}
-  closeEditModal();renderPeriodGrid();
+  closeEditModal();renderPeriodGrid();updateProjAlertBadge();
   await saveEntry(_editEntry);showToast('Entry updated');
 }
 
@@ -1286,7 +1403,7 @@ function renderTimesheets(){
     const ts=timesheets.find(t=>t.periodKey===isoDate(s)&&t.group===g);
     return{hrs,status:ts?ts.status:(hrs>0?'not submitted':'no hours'),ts};
   }
-  const pS=new Date(start.getTime()-MS_PERIOD),nS=new Date(start.getTime()+MS_PERIOD);
+  const pS=addDays(start,-14),nS=addDays(start,14);
   const prev=boxD(pS,getPeriodEnd(pS)),cur=boxD(start,end),nxt=boxD(nS,getPeriodEnd(nS));
   function setBox(lId,vId,sId,s,e,data){
     const l=document.getElementById(lId);if(l)l.textContent=fmtDate(s)+' – '+fmtDate(e);
@@ -1319,19 +1436,28 @@ function renderTimesheets(){
   s2('ts-earn',est>0?'$'+Math.round(est).toLocaleString():'—');
 
   // Submit button state
-  const already=timesheets.find(t=>t.periodKey===pk&&t.group===g&&!['recalled','draft'].includes(t.status));
+  // Admins see the whole team here, so only their own timesheet counts as "already submitted"
+  const already=timesheets.find(t=>t.periodKey===pk&&t.group===g&&!['recalled','draft'].includes(t.status)&&(!isAdmin()||isMine(t)));
   const btn=document.getElementById('ts-submit-btn'),msg=document.getElementById('ts-submit-msg');
-  if(already){
+  if(!already){
+    if(isAdmin()){
+      if(btn){btn.disabled=true;btn.textContent='Submit from My Pay';}
+      if(msg){msg.textContent='This tab shows the whole team, so totals include everyone. Submit your own time from My Pay.';msg.style.color='var(--mu)';}
+    } else {
+      if(btn){btn.disabled=false;btn.textContent='Submit for approval ↗';}
+      if(msg){msg.textContent='';msg.style.color='var(--mu)';}
+    }
+  } else {
     if(btn){btn.disabled=true;btn.textContent='Already submitted';}
     if(already.status==='approved'){
       if(msg){
-        const rb='<button class="btn sm" data-pk="'+already.periodKey+'" data-grp="'+already.group+'" onclick="recallTS(this.dataset.pk,this.dataset.grp)" style="margin-left:6px;">Recall for changes</button>';
+        const rb='<button class="btn sm" data-pk="'+already.periodKey+'" data-grp="'+already.group+'" data-em="'+esc(already.employeeEmail||'')+'" onclick="recallTS(this.dataset.pk,this.dataset.grp,this.dataset.em)" style="margin-left:6px;">Recall for changes</button>';
         msg.innerHTML='Status: <strong>approved</strong>. '+rb;
         msg.style.color='var(--ok)';
       }
     } else if(already.status==='pending'){
       if(msg){
-        const rb2='<button class="btn sm er" data-pk="'+already.periodKey+'" data-grp="'+already.group+'" onclick="recallTS(this.dataset.pk,this.dataset.grp)" style="margin-left:6px;">Recall</button>';
+        const rb2='<button class="btn sm er" data-pk="'+already.periodKey+'" data-grp="'+already.group+'" data-em="'+esc(already.employeeEmail||'')+'" onclick="recallTS(this.dataset.pk,this.dataset.grp,this.dataset.em)" style="margin-left:6px;">Recall</button>';
         msg.innerHTML='Status: <strong>pending</strong>. '+rb2;
         msg.style.color='var(--ac)';
       }
@@ -1359,6 +1485,7 @@ function renderTimesheets(){
   const pend=timesheets.filter(t=>t.status==='pending').length;
   const pb=document.getElementById('pend-badge');
   if(pb){pb.style.display=pend>0?'inline':'none';pb.textContent=pend;}
+  renderMyPay();
 
   // History table
   let html='';
@@ -1378,15 +1505,15 @@ function renderTimesheets(){
       let eCell='—';
       if(eTot>0){const eSt=eAppr===tExp.length?'approved':'pending';eCell='$'+eTot.toFixed(2)+' <span class="bge bge-'+eSt+'" style="font-size:10px;">'+eSt+'</span>';}
       html+='<tr>'
-        +'<td style="white-space:nowrap;font-size:12px;">'+esc(t.periodLabel)+'</td>'
+        +'<td style="white-space:nowrap;font-size:12px;">'+esc(tsLabel(t))+'</td>'
         +'<td style="white-space:nowrap;font-size:12px;">'+esc(emp)+'</td>'
         +'<td>'+t.hours.toFixed(2)+'h</td>'
         +'<td><span class="bge bge-'+t.status+'">'+t.status+'</span></td>'
         +'<td>'+eCell+'</td>'
         +'<td style="white-space:nowrap;">'
         +'<button class="btn sm" data-pk="'+t.periodKey+'" data-grp="'+t.group+'" onclick="viewTS(this.dataset.pk,this.dataset.grp)" style="margin-right:3px;">View</button>'
-        +(t.status==='pending'?'<button class="btn sm er" data-pk="'+t.periodKey+'" data-grp="'+t.group+'" onclick="recallTS(this.dataset.pk,this.dataset.grp)" style="margin-right:3px;">Recall</button>':'')
-        +(t.status==='approved'?'<button class="btn sm" data-pk="'+t.periodKey+'" data-grp="'+t.group+'" onclick="recallTS(this.dataset.pk,this.dataset.grp)" style="margin-right:3px;">Recall</button>':'')
+        +(t.status==='pending'?'<button class="btn sm er" data-pk="'+t.periodKey+'" data-grp="'+t.group+'" data-em="'+esc(t.employeeEmail||'')+'" onclick="recallTS(this.dataset.pk,this.dataset.grp,this.dataset.em)" style="margin-right:3px;">Recall</button>':'')
+        +(t.status==='approved'?'<button class="btn sm" data-pk="'+t.periodKey+'" data-grp="'+t.group+'" data-em="'+esc(t.employeeEmail||'')+'" onclick="recallTS(this.dataset.pk,this.dataset.grp,this.dataset.em)" style="margin-right:3px;">Recall</button>':'')
         +(t.status!=='approved'&&(isAdmin()||t.status==='recalled'||t.status==='draft')?'<button class="btn sm er" data-spid="'+t.spId+'" data-pk="'+t.periodKey+'" onclick="deleteTS(this.dataset.spid,this.dataset.pk)">Del</button>':'')
         +'</td></tr>';
     });
@@ -1395,6 +1522,7 @@ function renderTimesheets(){
 }
 
 async function submitCurrentPeriod(){
+  if(isAdmin()){showToast('Submit your own time from My Pay');return;}
   const g=getGroup(),{start,end}=getPeriod(g),pk=isoDate(start);
   if(timesheets.find(t=>t.periodKey===pk&&t.group===g&&!['recalled','draft'].includes(t.status))){showToast('Already submitted');return;}
   const es=entries.filter(e=>inPeriod(e.date,start,end));
@@ -1409,6 +1537,7 @@ async function submitCurrentPeriod(){
 }
 
 function viewTS(pk,grp){
+  const pgEl=document.getElementById('pay-group');if(pgEl&&pgEl.tagName==='SELECT')pgEl.disabled=false;
   const ts=timesheets.find(t=>t.periodKey===pk&&(t.group===grp||!grp));
   if(!ts){showToast('Not found — try refreshing the page');return;}
   document.getElementById('pay-group').value=ts.group||getGroup();
@@ -1422,11 +1551,11 @@ function viewTS(pk,grp){
   document.getElementById('section-manual').classList.add('active');
   const btn=document.getElementById('btn-today');if(btn)btn.style.display=periodOffset!==0?'inline':'none';
   updatePeriodBadge();renderPeriodGrid();
-  showToast('Viewing: '+ts.periodLabel);
+  showToast('Viewing: '+tsLabel(ts));
 }
 
-async function recallTS(pk,grp){
-  const ts=timesheets.find(t=>t.periodKey===pk&&(t.group===grp||!grp));
+async function recallTS(pk,grp,em){
+  const ts=timesheets.find(t=>t.periodKey===pk&&(t.group===grp||!grp)&&(!em||(t.employeeEmail||'').toLowerCase()===em.toLowerCase()));
   if(!ts){showToast('Timesheet not found — try refreshing the page');return;}
   if(!confirm('Recall this timesheet? It will be removed from approvals and you can make changes before resubmitting.'))return;
   ts.status='recalled';
@@ -1502,7 +1631,7 @@ function renderApprovals(){
         expHtml+='</div></div>';
       }
       html+='<div class="ai"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">'
-        +'<div style="flex:1;"><p style="font-size:14px;font-weight:600;">Group '+esc(t.group)+' · '+esc(t.periodLabel)+'</p>'
+        +'<div style="flex:1;"><p style="font-size:14px;font-weight:600;">Group '+esc(t.group)+' · '+esc(tsLabel(t))+'</p>'
         +(t.employee?'<p style="font-size:12px;color:var(--mu);margin-top:2px;">'+esc(t.employee)+'</p>':'')
         +'<p style="font-size:12px;color:var(--mu);margin-top:2px;">'+t.hours.toFixed(2)+'h total'+est+'</p>'
         +'<div style="margin-top:6px;">'+types+'</div>'+expHtml+'</div>'
@@ -1522,7 +1651,7 @@ function renderApprovals(){
       return e.status==='approved' && expMatchesEmp(e,t.employeeEmail,t.employee);
     });
     const aT=aExp.reduce((s,e)=>s+e.amount,0);
-    hh+='<tr><td style="white-space:nowrap;font-size:12px;">'+esc(t.periodLabel)+'</td><td style="white-space:nowrap;font-size:12px;">'+esc(t.employee||'—')+'</td><td>'+t.hours.toFixed(2)+'h</td><td>'+(t.estimatedEarnings?'$'+Math.round(t.estimatedEarnings).toLocaleString():'—')+'</td><td>'+(aT>0?'$'+aT.toFixed(2):'—')+'</td></tr>';
+    hh+='<tr><td style="white-space:nowrap;font-size:12px;">'+esc(tsLabel(t))+'</td><td style="white-space:nowrap;font-size:12px;">'+esc(t.employee||'—')+'</td><td>'+t.hours.toFixed(2)+'h</td><td>'+(t.estimatedEarnings?'$'+Math.round(t.estimatedEarnings).toLocaleString():'—')+'</td><td>'+(aT>0?'$'+aT.toFixed(2):'—')+'</td></tr>';
   });
   hl.innerHTML=hh+'</tbody></table>';
 }
@@ -1667,6 +1796,7 @@ async function submitExpenses(){
 }
 
 function renderReports(){
+  renderProjectWatch();
   const projF=(document.getElementById('rpt-proj')?.value||'').toLowerCase();
   const fromV=document.getElementById('rpt-from')?.value;
   const toV=document.getElementById('rpt-to')?.value;
@@ -1691,6 +1821,252 @@ function renderReports(){
   const rpa=document.getElementById('rpt-all-tbl');
   if(rpa)rpa.innerHTML=sorted.length?'<table class="tbl"><thead><tr><th>Date</th><th>Employee</th><th>Project</th><th>Type</th><th>Hours</th><th>Notes</th></tr></thead><tbody>'+sorted.map(e=>'<tr><td>'+e.date+'</td><td style="overflow:hidden;text-overflow:ellipsis;max-width:80px;white-space:nowrap;">'+esc(e.employee||'You')+'</td><td title="'+esc(e.project)+'" style="overflow:hidden;text-overflow:ellipsis;max-width:150px;white-space:nowrap;">'+esc(e.project)+'</td><td><span class="bge bge-'+(e.hourType||'office')+'" style="font-size:10px;">'+TL[e.hourType||'office']+'</span></td><td>'+e.hours.toFixed(2)+'h</td><td style="color:var(--mu);overflow:hidden;text-overflow:ellipsis;max-width:100px;white-space:nowrap;">'+esc(e.notes||'')+'</td></tr>').join('')+'</tbody></table>':'<p style="font-size:13px;color:var(--mu);">No entries match.</p>';
 }
+// ============================================================
+// PROJECT HOURS WATCH (Reports)
+// ============================================================
+const PW_DEFAULTS={watch:40,alert:80};
+const PW_OVERHEAD=['general admin/meetings','misc admin/meetings','asana time','asana work','other project work','project tracking_main (travel)','project tracking_main'];
+let pwWeekOffset=0,pwOpen=null,pwRows=[];
+function weekStartOf(ref){const d=parseLocalDate(ref);return addDays(d,-((d.getDay()+6)%7));}
+function isOverheadProject(n){const x=(n||'').trim().toLowerCase();return /^00\d\d[ _]/.test(x)||PW_OVERHEAD.includes(x);}
+function getProjAlertCfg(){
+  try{const c=JSON.parse(localStorage.getItem('whs_proj_alert')||'{}');return{watch:c.watch>0?c.watch:PW_DEFAULTS.watch,alert:c.alert>0?c.alert:PW_DEFAULTS.alert};}
+  catch(e){return{...PW_DEFAULTS};}
+}
+function saveProjAlertCfg(){
+  const w=parseFloat(document.getElementById('pw-watch').value),a=parseFloat(document.getElementById('pw-alert').value);
+  try{localStorage.setItem('whs_proj_alert',JSON.stringify({watch:w>0?w:PW_DEFAULTS.watch,alert:a>0?a:PW_DEFAULTS.alert}));}catch(e){}
+  renderProjectWatch();
+}
+function sumProjectWeek(ws,incOverhead){
+  const we=addDays(ws,6),out={};
+  entries.forEach(function(e){
+    if(!e.date||!inPeriod(e.date,ws,we))return;
+    const n=(e.project||'(no project)').trim();
+    if(!incOverhead&&isOverheadProject(n))return;
+    if(!out[n])out[n]={name:n,total:0,people:{}};
+    const emp=e.employee||'Unknown',di=dayNum(parseLocalDate(e.date))-dayNum(ws);
+    if(!out[n].people[emp])out[n].people[emp]={total:0,days:[0,0,0,0,0,0,0]};
+    out[n].total+=e.hours;out[n].people[emp].total+=e.hours;out[n].people[emp].days[di]+=e.hours;
+  });
+  return out;
+}
+function projStatus(cur,prev,cfg){
+  return{level:cur>=cfg.alert?'alert':cur>=cfg.watch?'watch':'ok',spike:cur>=prev*2&&cur-prev>=20};
+}
+function buildProjectRows(ws,incOverhead,cfg){
+  const cur=sumProjectWeek(ws,incOverhead),prev=sumProjectWeek(addDays(ws,-7),incOverhead),toDate={};
+  entries.forEach(function(e){const n=(e.project||'(no project)').trim();toDate[n]=(toDate[n]||0)+e.hours;});
+  const rank={alert:0,watch:1,ok:2};
+  return Object.values(cur).map(function(p){
+    const pv=prev[p.name]?prev[p.name].total:0;
+    return{...p,prev:pv,toDate:toDate[p.name]||0,...projStatus(p.total,pv,cfg)};
+  }).sort(function(a,b){return rank[a.level]-rank[b.level]||b.total-a.total;});
+}
+function updateProjAlertBadge(){
+  const b=document.getElementById('proj-alert-badge');if(!b)return;
+  if(!isAdmin()){b.style.display='none';return;}
+  const n=buildProjectRows(weekStartOf(new Date()),false,getProjAlertCfg()).filter(r=>r.level==='alert'||r.spike).length;
+  b.style.display=n>0?'inline':'none';b.textContent=n;
+  b.title=n+' project(s) over the alert level or spiking this week';
+}
+function navProjWeek(dir){pwWeekOffset=dir===0?0:pwWeekOffset+dir;pwOpen=null;renderProjectWatch();}
+function toggleProjRow(i){pwOpen=pwOpen===pwRows[i].name?null:pwRows[i].name;renderProjectWatch();}
+function renderProjectWatch(){
+  const tbl=document.getElementById('pw-table');if(!tbl)return;
+  const cfg=getProjAlertCfg();
+  const wi=document.getElementById('pw-watch'),ai=document.getElementById('pw-alert');
+  if(document.activeElement!==wi)wi.value=cfg.watch;
+  if(document.activeElement!==ai)ai.value=cfg.alert;
+  const ws=addDays(weekStartOf(new Date()),pwWeekOffset*7),we=addDays(ws,6);
+  const inc=document.getElementById('pw-overhead').checked;
+  document.getElementById('pw-range').textContent='Mon '+fmtDate(ws)+' – Sun '+fmtDate(we)+(pwWeekOffset===0?' (current week)':'');
+  document.getElementById('pw-today').style.display=pwWeekOffset!==0?'inline':'none';
+  pwRows=buildProjectRows(ws,inc,cfg);
+  const alerts=pwRows.filter(r=>r.level==='alert'),watch=pwRows.filter(r=>r.level==='watch'),spikes=pwRows.filter(r=>r.spike);
+  const totHrs=pwRows.reduce((s,r)=>s+r.total,0);
+  document.getElementById('pw-stats').innerHTML=
+    '<div class="sb3"><div class="sl">Over alert level</div><div class="sv" style="color:'+(alerts.length?'var(--er)':'var(--tx)')+';">'+alerts.length+'</div></div>'
+    +'<div class="sb3"><div class="sl">On watch</div><div class="sv" style="color:'+(watch.length?'var(--ac)':'var(--tx)')+';">'+watch.length+'</div></div>'
+    +'<div class="sb3"><div class="sl">Hours charged</div><div class="sv">'+totHrs.toFixed(2)+'h</div></div>';
+  const ban=document.getElementById('pw-banner');
+  if(alerts.length||spikes.length){
+    const names=alerts.slice(0,3).map(r=>esc(r.name)+' ('+r.total.toFixed(2)+'h)').join(', ');
+    ban.innerHTML='<div style="background:rgba(224,85,85,.1);border:1px solid rgba(224,85,85,.4);border-radius:var(--rs);padding:10px 12px;font-size:13px;margin-bottom:12px;">'
+      +(alerts.length?'<strong style="color:var(--er);">'+alerts.length+' project'+(alerts.length>1?'s':'')+' at or over '+cfg.alert+'h this week:</strong> '+names+(alerts.length>3?' and '+(alerts.length-3)+' more':''):'')
+      +(spikes.length?(alerts.length?'<br/>':'')+'<strong style="color:var(--ac);">'+spikes.length+' project'+(spikes.length>1?'s':'')+' spiking</strong> compared with last week.':'')
+      +'</div>';
+  } else ban.innerHTML='';
+  if(!pwRows.length){tbl.innerHTML='<p style="font-size:13px;color:var(--mu);">No project hours logged for this week.</p>';return;}
+  const dn=DAYS.map((d,i)=>d+' '+addDays(ws,i).getDate());
+  let h='<table class="tbl" style="min-width:640px;"><thead><tr><th>Status</th><th style="width:36%">Project</th><th>This wk</th><th>Last wk</th><th>Change</th><th>People</th><th>To date</th></tr></thead><tbody>';
+  pwRows.forEach(function(r,i){
+    const chg=r.total-r.prev,ppl=Object.keys(r.people).length;
+    const st=(r.level==='alert'?'<span class="bge bge-alert">Alert</span>':r.level==='watch'?'<span class="bge bge-pending">Watch</span>':'<span style="color:var(--mu);">—</span>')
+      +(r.spike?' <span class="bge bge-spike">Spike</span>':'');
+    const open=pwOpen===r.name;
+    h+='<tr style="cursor:pointer;" data-i="'+i+'" onclick="toggleProjRow(+this.dataset.i)">'
+      +'<td style="white-space:nowrap;">'+st+'</td>'
+      +'<td title="'+esc(r.name).replace(/"/g,'&quot;')+'" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px;">'+(open?'▾ ':'▸ ')+esc(r.name)+'</td>'
+      +'<td style="font-weight:600;">'+r.total.toFixed(2)+'h</td>'
+      +'<td>'+r.prev.toFixed(2)+'h</td>'
+      +'<td style="color:'+(chg>0?'var(--ac)':'var(--mu)')+';">'+(chg>0?'+':'')+chg.toFixed(2)+'h</td>'
+      +'<td>'+ppl+'</td>'
+      +'<td>'+r.toDate.toFixed(2)+'h</td></tr>';
+    if(open){
+      h+='<tr><td colspan="7" style="background:var(--bg2);"><div class="tscr"><table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="color:var(--mu);"><th style="text-align:left;padding:3px 6px;">Employee</th>'
+        +dn.map(d=>'<th style="text-align:right;padding:3px 6px;white-space:nowrap;">'+d+'</th>').join('')+'<th style="text-align:right;padding:3px 6px;">Total</th></tr></thead><tbody>';
+      Object.entries(r.people).sort((a,b)=>b[1].total-a[1].total).forEach(function([n,p]){
+        h+='<tr><td style="padding:3px 6px;white-space:nowrap;">'+esc(n)+'</td>'
+          +p.days.map(x=>'<td style="text-align:right;padding:3px 6px;color:'+(x>0?'var(--tx)':'var(--mu)')+';">'+(x>0?x.toFixed(2):'—')+'</td>').join('')
+          +'<td style="text-align:right;padding:3px 6px;font-weight:600;">'+p.total.toFixed(2)+'h</td></tr>';
+      });
+      h+='</tbody></table></div></td></tr>';
+    }
+  });
+  tbl.innerHTML=h+'</tbody></table>';
+}
+
+// ============================================================
+// MY PAY (admins: own hours and pay only)
+// ============================================================
+let mySelDay=null;
+function myGroup(){const i=getEmployeeInfo(currentUserEmail);return i?i.group:getGroup();}
+function isMine(x){
+  const em=(x.employeeEmail||'').toLowerCase();
+  if(em)return em===currentUserEmail.toLowerCase();
+  const nm=(x.employee||'').trim().toLowerCase();
+  return !!nm&&nm===currentUserName.trim().toLowerCase();
+}
+function myPayActive(){const el=document.getElementById('section-mypay');return !!el&&el.classList.contains('active');}
+function entryKey(e){if(e.spId)return e.spId;if(!e._lid)e._lid='local_'+Date.now()+'_'+Math.floor(Math.random()*1e6);return e._lid;}
+function toggleMyManual(){
+  const wrap=document.getElementById('my-search-wrap'),manual=document.getElementById('my-proj-manual'),toggle=document.getElementById('my-man-toggle');
+  const isM=manual.style.display!=='none';
+  wrap.style.display=isM?'':'none';manual.style.display=isM?'none':'';
+  toggle.textContent=isM?' — enter manually':' — search Asana';
+  document.getElementById('my-proj-gid').value=isM?'':'MANUAL';
+  if(isM){document.getElementById('my-proj-in').value='';manual.value='';}
+}
+function selMyDay(ds,lbl){
+  mySelDay=ds;
+  document.getElementById('my-day-lbl').textContent='Add hours for '+lbl;
+  renderMyPay();
+}
+function renderMyPay(){
+  if(!myPayActive())return;
+  const g=myGroup(),{start,end}=getPeriod(g),pk=isoDate(start),today=isoDate(new Date());
+  const mine=entries.filter(isMine);
+  const es=mine.filter(e=>inPeriod(e.date,start,end)).sort((a,b)=>a.date.localeCompare(b.date));
+  const hrsOf=t=>es.filter(e=>(e.hourType||'office')===t).reduce((a,e)=>a+e.hours,0);
+  const off=hrsOf('office'),trv=hrsOf('travel'),ons=hrsOf('onsite');
+  const pExp=getPeriodExps(start,end).filter(e=>expMatchesEmp(e,currentUserEmail,currentUserName));
+  const expTot=pExp.reduce((s,e)=>s+e.amount,0),est=calcEarnings(es);
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  set('my-title','My pay: Group '+g+', '+fmtDate(start)+' – '+fmtDate(end));
+  set('my-off',off.toFixed(2)+'h');set('my-trv',trv.toFixed(2)+'h');set('my-ons',ons.toFixed(2)+'h');
+  set('my-tot',(off+trv+ons).toFixed(2)+'h');
+  set('my-exp-tot','$'+expTot.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+  set('my-earn',est>0?'$'+Math.round(est).toLocaleString():'—');
+
+  ['my-week1','my-week2'].forEach(function(id,wi){
+    let html='';
+    for(let i=0;i<7;i++){
+      const d=addDays(start,wi*7+i),ds=isoDate(d),dn=DAYS[(d.getDay()+6)%7];
+      const hrs=es.filter(e=>e.date===ds).reduce((a,e)=>a+e.hours,0);
+      html+='<div class="dc'+(ds===today?' today':'')+(mySelDay===ds?' sel':'')+'" data-ds="'+ds+'" data-lbl="'+dn+' '+fmtDate(d)+'" onclick="selMyDay(this.dataset.ds,this.dataset.lbl)">'
+        +'<div class="dn">'+dn+'</div><div class="dd">'+d.getDate()+'</div>'
+        +'<div class="dh'+(hrs>0?' has':'')+'">'+(hrs>0?hrs.toFixed(2)+'h':'—')+'</div></div>';
+    }
+    document.getElementById(id).innerHTML=html;
+  });
+
+  const list=document.getElementById('my-entry-list');
+  if(!es.length)list.innerHTML='';
+  else{
+    let h='<div class="div"></div><table class="tbl"><thead><tr><th style="width:16%"></th><th style="width:9%">Day</th><th style="width:26%">Project</th><th style="width:10%">Type</th><th style="width:8%">Hours</th><th>Notes</th></tr></thead><tbody>';
+    es.forEach(function(e){
+      const d=parseLocalDate(e.date),k=esc(entryKey(e));
+      h+='<tr><td style="white-space:nowrap;">'
+        +'<button class="btn sm" data-spid="'+k+'" onclick="openEditModal(this.dataset.spid)" style="margin-right:3px;">Edit</button>'
+        +'<button class="btn sm" data-spid="'+k+'" onclick="dupEntry(this.dataset.spid)" style="margin-right:3px;" title="Duplicate to next day">Dup</button>'
+        +'<button class="btn sm er" data-spid="'+k+'" onclick="delEntry(this.dataset.spid)">Del</button></td>'
+        +'<td>'+DAYS[(d.getDay()+6)%7]+' '+d.getDate()+'</td>'
+        +'<td title="'+esc(e.project)+'" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(e.project)+'</td>'
+        +'<td><span class="bge bge-'+(e.hourType||'office')+'">'+TL[e.hourType||'office']+'</span></td>'
+        +'<td>'+e.hours.toFixed(2)+'h</td>'
+        +'<td style="color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(e.notes||'')+'</td></tr>';
+    });
+    list.innerHTML=h+'</tbody></table>';
+  }
+
+  const myTS=timesheets.filter(isMine);
+  const already=myTS.find(t=>t.periodKey===pk&&t.group===g&&!['recalled','draft'].includes(t.status));
+  const btn=document.getElementById('my-submit-btn'),st=document.getElementById('my-status');
+  btn.disabled=!!already;
+  btn.textContent=already?'Already submitted':'Submit for approval ↗';
+  if(already){
+    st.innerHTML='Status: <strong>'+esc(already.status)+'</strong>. <button class="btn sm" data-pk="'+already.periodKey+'" data-grp="'+already.group+'" data-em="'+esc(already.employeeEmail||currentUserEmail)+'" onclick="recallTS(this.dataset.pk,this.dataset.grp,this.dataset.em)" style="margin-left:6px;">Recall for changes</button>';
+    st.style.color=already.status==='approved'?'var(--ok)':'var(--ac)';
+  } else {st.textContent=es.length?'Not submitted yet.':'';st.style.color='var(--mu)';}
+
+  const xl=document.getElementById('my-exp-list');
+  if(!pExp.length)xl.innerHTML='<p style="font-size:13px;color:var(--mu);">No expenses logged for this period.</p>';
+  else{
+    let h='<table class="tbl"><thead><tr><th>Date</th><th>Project</th><th>Category</th><th>Amount</th><th>Status</th></tr></thead><tbody>';
+    pExp.forEach(function(e){h+='<tr><td>'+e.date+'</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+esc(e.project)+'">'+esc(e.project)+'</td><td>'+(CAT[e.category]||'Other')+'</td><td>$'+e.amount.toFixed(2)+'</td><td><span class="bge bge-'+(e.status==='approved'?'approved':e.status==='submitted'?'pending':'draft')+'">'+esc(e.status)+'</span></td></tr>';});
+    xl.innerHTML=h+'</tbody></table>';
+  }
+
+  const tl=document.getElementById('my-ts-list');
+  if(!myTS.length)tl.innerHTML='<p style="font-size:13px;color:var(--mu);">You have not submitted a timesheet yet.</p>';
+  else{
+    let h='<table class="tbl" style="min-width:420px;"><thead><tr><th>Period</th><th>Hours</th><th>Status</th><th></th></tr></thead><tbody>';
+    [...myTS].sort((a,b)=>b.periodKey.localeCompare(a.periodKey)).forEach(function(t){
+      h+='<tr><td style="white-space:nowrap;font-size:12px;">'+esc(tsLabel(t))+'</td><td>'+t.hours.toFixed(2)+'h</td><td><span class="bge bge-'+esc(t.status)+'">'+esc(t.status)+'</span></td>'
+        +'<td style="white-space:nowrap;"><button class="btn sm" data-pk="'+t.periodKey+'" onclick="viewMyPeriod(this.dataset.pk)">View</button></td></tr>';
+    });
+    tl.innerHTML=h+'</tbody></table>';
+  }
+}
+function viewMyPeriod(pk){
+  periodOffset=Math.round((dayNum(parseLocalDate(pk))-dayNum(getPeriodStart(myGroup(),new Date())))/14);
+  mySelDay=null;
+  const btn=document.getElementById('btn-today');if(btn)btn.style.display=periodOffset!==0?'inline':'none';
+  updatePeriodBadge();renderPeriodGrid();renderTimesheets();renderExpenses();
+}
+async function addMyEntry(){
+  if(!mySelDay){showToast('Select a day first');return;}
+  const hrs=parseFloat(document.getElementById('my-hrs').value);
+  const isM=document.getElementById('my-proj-manual').style.display!=='none';
+  const gid=isM?'MANUAL':document.getElementById('my-proj-gid').value;
+  const name=(isM?document.getElementById('my-proj-manual').value:document.getElementById('my-proj-in').value).trim();
+  const type=document.getElementById('my-type').value,notes=document.getElementById('my-notes').value;
+  if(!hrs||hrs<=0){showToast('Enter valid hours');return;}
+  if(!name){showToast('Select a project');return;}
+  if(entries.find(x=>x.spId&&isMine(x)&&x.date===mySelDay&&x.hours===hrs&&x.hourType===type&&x.project===name)){showToast('An identical entry already exists for this day — skipped to avoid duplicate');return;}
+  const entry={spId:null,date:mySelDay,hours:hrs,hourType:type,projectGid:gid,project:name,notes,group:myGroup(),employee:currentUserName,employeeEmail:currentUserEmail};
+  entries.push(entry);
+  document.getElementById('my-hrs').value='';document.getElementById('my-notes').value='';
+  renderPeriodGrid();renderTimesheets();
+  persistUnsavedBackup();
+  await saveEntry(entry);
+  persistUnsavedBackup();
+  renderMyPay();updateProjAlertBadge();
+  showToast(entry.spId?'Hours added':'Hours added locally — will sync when connection improves');
+}
+async function submitMyPeriod(){
+  const g=myGroup(),{start,end}=getPeriod(g),pk=isoDate(start);
+  if(timesheets.find(t=>isMine(t)&&t.periodKey===pk&&t.group===g&&!['recalled','draft'].includes(t.status))){showToast('Already submitted');return;}
+  const es=entries.filter(e=>isMine(e)&&inPeriod(e.date,start,end));
+  if(!es.length){showToast('No hours logged for this period');return;}
+  const typeHours={office:0,travel:0,onsite:0};
+  es.forEach(e=>typeHours[e.hourType||'office']+=e.hours);
+  const ts={spId:null,periodKey:pk,periodLabel:fmtDate(start)+' – '+fmtDate(end),group:g,hours:es.reduce((a,e)=>a+e.hours,0),projects:[...new Set(es.map(e=>e.project))],typeHours,estimatedEarnings:calcEarnings(es),status:'pending',employee:currentUserName,employeeEmail:currentUserEmail};
+  timesheets.push(ts);renderTimesheets();renderApprovals();renderMyPay();
+  await saveTimesheet(ts);showToast('Timesheet submitted ✓');
+}
+
 function clearRptFilters(){document.getElementById('rpt-proj').value='';document.getElementById('rpt-from').value='';document.getElementById('rpt-to').value='';renderReports();}
 
 function renderRatesSummary(){
@@ -1710,8 +2086,16 @@ function switchTab(event,tab){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
   if(event)event.currentTarget.classList.add('active');
+  else document.querySelectorAll('.tab').forEach(t=>{if((t.getAttribute('onclick')||'').includes("'"+tab+"'"))t.classList.add('active');});
   document.getElementById('section-'+tab).classList.add('active');
-  if(tab==='manual')renderPeriodGrid();
+  // My Pay always shows your own pay group, so the top bar is locked to it while you are there
+  const pg=document.getElementById('pay-group');
+  if(pg&&pg.tagName==='SELECT'){
+    pg.disabled=(tab==='mypay');
+    if(tab==='mypay'&&pg.value!==myGroup()){pg.value=myGroup();onGroupChange();}
+  }
+  if(tab==='mypay')renderMyPay();
+  else if(tab==='manual')renderPeriodGrid();
   else if(tab==='timesheets')renderTimesheets();
   else if(tab==='approvals')renderApprovals();
   else if(tab==='expenses')renderExpenses();
@@ -1731,13 +2115,14 @@ function applyRoleUI(){
     }
   }
 }
-function renderAll(){updatePeriodBadge();renderPeriodGrid();renderTimesheets();renderExpenses();renderApprovals();}
+function renderAll(){updatePeriodBadge();renderPeriodGrid();renderTimesheets();renderExpenses();renderApprovals();updateProjAlertBadge();if(document.getElementById('section-reports').classList.contains('active'))renderReports();}
 function showSetup(){document.getElementById('auth-screen').style.display='none';document.getElementById('setup-screen').style.display='flex';}
 function showApp(){
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('setup-screen').style.display='none';
   document.getElementById('app').style.display='block';
-  const rates=JSON.parse(localStorage.getItem('whs_rates')||'{}');
+  const myInfo=getEmployeeInfo(currentUserEmail);
+  const rates=JSON.parse(localStorage.getItem(ratesKey())||'null')||(myInfo&&myInfo.rate?{office:myInfo.rate,travel:myInfo.rate,onsite:myInfo.rate}:{});
   if(rates.office)document.getElementById('r-office').value=rates.office;
   if(rates.travel)document.getElementById('r-travel').value=rates.travel;
   if(rates.onsite)document.getElementById('r-onsite').value=rates.onsite;
